@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 # ------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------
-st.set_page_config(page_title="Bank Leumi FY26 Quarter_1 Dashboard", layout="wide")
+st.set_page_config(page_title="Bank Leumi FY26 Quarter_2 Dashboard", layout="wide")
 
 # ------------------------------------------------
 # THEME STYLING
@@ -136,7 +136,7 @@ st.sidebar.download_button(label="📥 Download Data (CSV)", data=csv, file_name
 # ------------------------------------------------
 # MAIN DASHBOARD
 # ------------------------------------------------
-st.title("📊 Bank Leumi FY26 Quarter_1 Dashboard")
+st.title("📊 Bank Leumi FY26 Quarter_2 Dashboard")
 
 # KPI ROW (Tiles with #1A2C44 Background)
 c1, c2, c3, c4, c5, c6 = st.columns(6)

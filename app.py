@@ -28,12 +28,6 @@ st.markdown(f"""
         background-color: #4F6A8F !important;
         color: white !important;
     }}
-    div[data-baseweb="select"] > div:focus-within {{
-        border-color: #16BDEB !important;
-    }}
-    li[role="option"][aria-selected="true"] {{
-        background-color: #9AC9E3 !important;
-    }}
 
     /* Sidebar Labels */
     section[data-testid="stSidebar"] label {{
@@ -70,14 +64,14 @@ st.markdown(f"""
         background-color: #07182D !important;
     }}
     [data-testid="stTable"] thead tr th {{
-        color: #EBC351 !important; /* Headers in Gold */
+        color: #EBC351 !important; 
         background-color: #1A2C44 !important;
         font-size: 16px !important;
     }}
     [data-testid="stTable"] tbody tr td {{
-        color: #FFFFFF !important; /* Fixed: Pure White Data Cells */
+        color: #FFFFFF !important; 
         background-color: #07182D !important;
-        font-weight: 600 !important; /* Feeble font corrected to Bold */
+        font-weight: 600 !important; 
         border-bottom: 1px solid #4F6A8F !important;
     }}
 
@@ -91,7 +85,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# DATA HANDLING (Updated Logic for Q2 CSV)
+# DATA HANDLING (Corrected Logic for KeyError)
 # ------------------------------------------------
 @st.cache_data
 def load_data():
@@ -103,27 +97,38 @@ def load_data():
     except:
         raw_df = pd.read_csv("cases.csv", encoding='cp1252')
     
-    # 1. Header Cleaning
+    # 1. Header Cleaning: Remove any leading/trailing whitespace
     raw_df.columns = raw_df.columns.str.strip()
     
-    # 2. Date Bucketing
-    raw_df['Opened Date'] = pd.to_datetime(raw_df['Opened Date'], errors='coerce')
-    raw_df = raw_df.dropna(subset=['Opened Date'])
-    raw_df['Month_Sort'] = raw_df['Opened Date'].dt.to_period('M') 
-    raw_df['Month'] = raw_df['Opened Date'].dt.strftime('%b\'%y')
-    
-    # 3. Numeric Conversions & Metrics
-    raw_df['SR_Count'] = 1
-    raw_df['MTTC_Val'] = pd.to_numeric(raw_df['Final Resolution Time (Days)'], errors='coerce').fillna(0)
-    raw_df['IST_Val'] = pd.to_numeric(raw_df['IST Hours'], errors='coerce').fillna(0)
-    raw_df['P1P2_Val'] = raw_df['Priority - Current (Text)'].apply(lambda x: 1 if str(x) in ['1', '2', 'P1', 'P2'] else 0)
-    
-    # Proactive logic based on your Q2 data titles (Notification/Failure detection)
-    raw_df['Is_Proactive'] = raw_df['Title'].str.contains('Proactive|Notification|Alert', case=False, na=False).astype(int)
+    # 2. Dynamic Column Mapping to prevent KeyErrors
+    cols = raw_df.columns.tolist()
+    mttc_col = next((c for c in cols if "Final Resolution Time" in c), None)
+    ist_col = next((c for c in cols if "IST Hours" in c), None)
+    priority_col = next((c for c in cols if "Priority - Current" in c), None)
+    tech_col = next((c for c in cols if "Technology" in c), "Technology")
+    title_col = next((c for c in cols if "Title" in c), "Title")
+    opened_col = next((c for c in cols if "Opened Date" in c), "Opened Date")
 
-    # 4. Aggregation by Technology
-    tech_col = 'Technology' if 'Technology' in raw_df.columns else raw_df.columns[0]
+    # 3. Date Bucketing
+    raw_df[opened_col] = pd.to_datetime(raw_df[opened_col], errors='coerce')
+    raw_df = raw_df.dropna(subset=[opened_col])
+    raw_df['Month_Sort'] = raw_df[opened_col].dt.to_period('M') 
+    raw_df['Month'] = raw_df[opened_col].dt.strftime('%b\'%y')
     
+    # 4. Numeric Conversions using mapped names
+    raw_df['SR_Count'] = 1
+    raw_df['MTTC_Val'] = pd.to_numeric(raw_df[mttc_col], errors='coerce').fillna(0) if mttc_col else 0
+    raw_df['IST_Val'] = pd.to_numeric(raw_df[ist_col], errors='coerce').fillna(0) if ist_col else 0
+    
+    if priority_col:
+        raw_df['P1P2_Val'] = raw_df[priority_col].apply(lambda x: 1 if str(x).strip() in ['1', '2', 'P1', 'P2'] else 0)
+    else:
+        raw_df['P1P2_Val'] = 0
+    
+    # Proactive logic
+    raw_df['Is_Proactive'] = raw_df[title_col].str.contains('Proactive|Notification|Alert', case=False, na=False).astype(int)
+
+    # 5. Aggregation
     df = raw_df.groupby(['Month', 'Month_Sort', tech_col]).agg({
         'SR_Count': 'sum',
         'P1P2_Val': 'sum',
@@ -135,7 +140,7 @@ def load_data():
     df.columns = ['Month', 'Month_Sort', 'Tech', 'SR', 'P1/P2', 'IST', 'MTTC', 'Proactive']
     df = df.sort_values('Month_Sort')
     
-    # 5. Final Calculations
+    # 6. Final Metrics
     df['Reactive'] = df['SR'] - df['Proactive']
     df['Proactive_Pct'] = (df['Proactive'] / df['SR']) * 100
     df['Efficiency_Score'] = df['MTTC'].apply(lambda x: (1/x)*100 if x > 0 else 0)
@@ -145,10 +150,10 @@ def load_data():
 df = load_data()
 
 # ------------------------------------------------
-# SIDEBAR
+# SIDEBAR & MAIN BODY (Formatting Preserved)
 # ------------------------------------------------
-st.sidebar.title("🛠️ Control Center")
 if not df.empty:
+    st.sidebar.title("🛠️ Control Center")
     sel_months = st.sidebar.multiselect("Reporting Months", df['Month'].unique(), default=df['Month'].unique())
     sel_tech = st.sidebar.multiselect("Technology Vertical", df['Tech'].unique(), default=df['Tech'].unique())
 
@@ -163,11 +168,9 @@ if not df.empty:
     csv = filtered.to_csv(index=False).encode('utf-8')
     st.sidebar.download_button(label="📥 Download Data (CSV)", data=csv, file_name='Bank_Leumi_Q2_Report.csv')
 
-    # ------------------------------------------------
-    # MAIN DASHBOARD
-    # ------------------------------------------------
     st.title("📊 Bank Leumi FY26 Quarter_2 Dashboard")
 
+    # KPI ROW
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     def mk_card(col, t, v):
         col.markdown(f'<div class="metric-card"><h4>{t}</h4><h2>{v}</h2></div>', unsafe_allow_html=True)
@@ -235,6 +238,6 @@ if not df.empty:
     with in1:
         st.markdown(f'<div class="insight-box"><h4>Engagement Strategy</h4><p>Proactive rate is <b>{round(filtered["Proactive_Pct"].mean())}%</b>. Proactive alerts help prevent downtime.</p></div>', unsafe_allow_html=True)
     with in2:
-        st.markdown(f'<div class="insight-box"><h4>Efficiency Growth</h4><p>Avg MTTC is <b>{round(filtered["MTTC"].mean(), 1)} days</b>. Resolving cases across technology verticals.</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="insight-box"><h4>Efficiency Growth</h4><p>Avg MTTC is <b>{round(filtered["MTTC"].mean(), 1)} days</b>. Cases are resolved efficiently across all technologies.</p></div>', unsafe_allow_html=True)
 else:
-    st.error("Please ensure 'cases.csv' is uploaded with the correct Quarter 2 headers.")
+    st.error("Column match failed or 'cases.csv' missing. Ensure the file has headers like 'IST Hours' and 'Technology'.")
